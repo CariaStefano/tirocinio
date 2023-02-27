@@ -130,10 +130,11 @@ aggregare =function(data){
   data= 
     ds %>%
     group_by(provincia) %>% 
-    summarise(fatturato20= sum(fatturato20)) %>% 
-    left_join(., limiti_amministrativi_prov, by = c(provincia = "SIGLA")) #%>% 
-  #na.omit(.) # TODO
-  #print(data)
+    summarise(fatturato20= sum(fatturato20),
+              utile20 = sum(na.omit(utile20)),
+              roe20= mean(na.omit(roe20)),
+              ros20= mean(na.omit(ros20))) %>% 
+    left_join(., limiti_amministrativi_prov, by = c(provincia = "SIGLA")) 
   
   return(data)
 }
@@ -162,9 +163,11 @@ mappa_provinc= function(input, output){
     tmap_options(check.and.fix = TRUE) +
     tm_polygons() +
     l_amm %>% 
-    dplyr::filter(fatturato20 >= input$slider) %>%
+    dplyr::filter(fatturato20 >= input$slider,
+                  roe20 >= input$slider2,
+                  utile20 >= input$slider_utile) %>%
     tm_shape(.)+
-    tm_fill("fatturato20", breaks = seq(0, 14, by = 2) * 1e8,  popup.vars = popup) +
+    tm_fill(input$radio, breaks = seq(0, 14, by = 2) * 1e8,  popup.vars = popup) +
     #tm_fill(popup.vars = popup)+
     tm_borders()
   
@@ -197,7 +200,10 @@ provincia_reg= fatturato_provincia %>%
 fatturato_regione = fatturato_provincia %>% 
   select(-geometry)  %>% # rimuovo geometry delle province  
   group_by(COD_REG) %>% 
-  summarise(fatturato20= sum(fatturato20)) %>% 
+  summarise(fatturato20= sum(fatturato20),
+            utile20 = sum(na.omit(utile20)),
+            roe20= mean(na.omit(roe20)),
+            ros20= mean(na.omit(ros20))) %>% 
   left_join(.,limiti_amministrativi_reg , by = "COD_REG")
 
 geo_fatturato_reg= st_transform(st_as_sf(fatturato_regione %>% select(DEN_REG, everything()))) #reorder??
@@ -224,10 +230,11 @@ server <- function(input, output) {
   # 
   # output$map = renderTmap(res())
                         
-# mappa reattiva
+
   fatturato = reactive({if(input$radio_vis == "province") {min(ds$fatturato20)}})
   output$fatturato= renderText({fatturato()})
   
+# mappa reattiva  
   reactive_map <- reactive({
     if(input$radio_vis == "province") {
       mappa_provinc(input, output)
@@ -254,9 +261,11 @@ server <- function(input, output) {
         tm_polygons()+
         #tm_polygons(col= "fatturato20")+
         geo_fatturato_reg %>% 
-        dplyr::filter(fatturato20 >= input$slider) %>%
+        dplyr::filter(fatturato20 >= input$slider,
+                      roe20 >= input$slider2,
+                      utile20 >= input$slider_utile) %>%
         tm_shape(.)+
-        tm_fill("fatturato20", breaks = seq(0, 70, by = 10) * 1e8, popup.vars = popup)+
+        tm_fill(input$radio , breaks = seq(0, 70, by = 10) * 1e8, popup.vars = popup)+
         tm_borders() 
     }
 })

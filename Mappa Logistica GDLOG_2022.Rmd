@@ -1,0 +1,360 @@
+---
+title: "GDLOG 2022"
+output: html_document
+date: "2023-02-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data import
+
+
+```{r echo=FALSE}
+
+logistica_2022=readr::read_csv("GDL06_geo_classifica_22.csv", na = "N.D.", 
+                   col_types = list("RAGIONE SOCIALE"= readr::col_factor(), 
+                                    "SEDE"= readr::col_factor(), 
+                                    "PROV"= readr::col_factor()))
+summary(logistica_2022)
+
+```
+
+# Librerie
+
+```{r pressure, echo=FALSE}
+
+library(dplyr)
+library(sf)
+library(tmap)
+
+```
+
+
+```{r echo=FALSE}
+tmap_mode("view")
+
+```
+
+
+```{r echo=FALSE}
+numeric_conversion= function(col){
+data= logistica_2022 %>% 
+    mutate(col= gsub("\\.", "", col),
+         col = as.numeric(col))
+return(data$col)
+  
+}
+
+numeric_conversion2= function(col){
+data= logistica_2022 %>% 
+    mutate(col= gsub("\\,", ".", col),
+         col = as.numeric(col))
+return(data$col)
+  
+}
+```
+
+```{r echo=FALSE}
+
+selection= c("nome"=1, "comune"=2, "provincia"=3, "fatturato20"=4, 
+         "fatturato19"=5, "utile20"=6, "utile19"=7, 
+         "ros20"= 8, "ros19"=9, "roe20"= 10, "roe19"= 11 )
+
+ds = logistica_2022 %>%
+  select(-`...1`,-`POS. '21`, -`POS. 22` ) %>% 
+  select(selection, everything()) %>% 
+  mutate(fatturato20= numeric_conversion(fatturato20),
+         fatturato19= numeric_conversion(fatturato19),
+         utile20 = numeric_conversion(utile20),
+         utile19 = numeric_conversion(utile19),
+         ros20= numeric_conversion2(ros20),
+         ros19= numeric_conversion2(ros19),
+         roe20= numeric_conversion2(roe20),
+         roe19= numeric_conversion2(roe19))
+
+ds
+```
+
+#########################
+
+```{r echo=FALSE}
+ds = ds %>% 
+  select(-1,-2,-3) %>% 
+  select("nome"=1, "comune"=2, "provincia"=3, "fatturato20"=4, 
+         "fatturato19"=5, "utile20"=6, "utile19"=7, 
+         "ros20"= 8, "ros19"=9, "roe20"= 10, "roe19"= 11,  everything()) %>% 
+  mutate(fatturato20=gsub("\\.", "", fatturato20),
+         fatturato20= as.numeric(fatturato20), 
+         fatturato19=gsub("\\.", "", fatturato19),
+         fatturato19= as.numeric(fatturato19),
+         utile20 = gsub("\\.", "", utile20),
+         utile20= as.numeric(utile20), 
+         utile19= gsub("\\.", "", utile19),
+         utile19= as.numeric(utile19),
+         ros20=gsub("\\,", ".", ros20),
+         ros20= as.numeric(ros20),
+         ros19= gsub("\\,", ".", ros19),
+         ros19= as.numeric(ros19),
+         roe20 = gsub("\\,", ".", roe20),
+         roe20= as.numeric(roe20),
+         roe19 = gsub("\\,", ".", roe19),
+         roe19= as.numeric(roe19))
+
+ds
+```
+
+
+## Import limiti amministrativi (Anno 2020)
+
+```{r echo=FALSE}
+
+
+limiti_amministrativi_prov = read_sf("Limiti01012020_g/ProvCM01012020_g/ProvCM01012020_g_WGS84.shp")
+
+limiti_amministrativi_prov = limiti_amministrativi_prov %>% 
+   select(-COD_RIP, -COD_UTS,-COD_PROV,-COD_CM,-DEN_CM,-TIPO_UTS,-SHAPE_AREA, -SHAPE_LEN, "Provincia"=DEN_UTS, -DEN_PROV) # in DEN_PROV ci sono alune osservazioni mancanti. Si è scelto di prendere DEN_UTS e rinominarlo come "Provincia"
+ 
+limiti_amministrativi_prov
+
+
+
+
+```
+# Aggregazione per provincia
+
+```{r echo=FALSE}
+
+aggregare =function(data){
+data= 
+  ds %>%
+  group_by(provincia) %>% 
+  summarise(fatturato20= sum(fatturato20)) %>% 
+  left_join(., limiti_amministrativi_prov, by = c(provincia = "SIGLA")) #%>% 
+  #na.omit(.) # TODO
+print(data)
+
+return(data)
+}
+
+fatturato_provincia = aggregare(fatturato_provincia)
+
+
+```
+
+```{r}
+fatturato_provincia[is.na(fatturato_provincia$Provincia),] #OC ,OT, PGG
+
+```
+
+```{r}
+ds[ds$provincia== "OC",] # MUTTI SPA	Podenzano, provincia di Piacenza (PC)
+ds[ds$provincia== "OT",] #NUOVA LOGISTICA LUCIANU SRL	Olbia, Italia --> SASSARI (SS)
+ds[ds$provincia== "PGG",] #CENTRO SMISTAMENTO MERCI	Citta' Di Castello, Italia --> Perugia (PG)
+#ds["provincia"]= stringr::str_replace_all(ds$provincia, "OC", "PC")
+```
+
+```{r}
+ds$provincia= stringr::str_replace_all(ds$provincia, "OC", "PC")
+ds$provincia= stringr::str_replace_all(ds$provincia, "OT", "SS")
+ds$provincia= stringr::str_replace_all(ds$provincia, "PGG", "PG")
+
+```
+
+```{r}
+fatturato_provincia = aggregare(fatturato_provincia)
+```
+
+
+# Trasformo in oggetto sf
+
+```{r}
+geo_ds= st_as_sf(ds, coords = c("long", "lat"), crs = "EPSG:4326")
+```
+
+# Mappa
+
+
+```{r echo=FALSE}
+
+l_amm=st_transform(st_as_sf(fatturato_provincia %>% select(Provincia ,everything())))
+
+geo_limiti_amministrativi= st_transform(limiti_amministrativi_prov %>% select(-COD_REG))
+
+popup= c("fatturato20","Provincia")
+tm_shape(geo_limiti_amministrativi)+
+  tm_polygons()+
+  #tm_fill(popup.vars = popup)+
+  tm_shape(l_amm)+
+  tm_fill("fatturato20", breaks = seq(0, 14, by = 2) * 1e8,  popup.vars = popup) +
+  tm_borders()
+
+#aggiungere il colore grigio nella leggenda
+```
+
+# Aggregazione per Comune
+
+```{r echo=FALSE}
+
+# rimuovo Italia
+
+the_names_2= ", Italia"
+ds$comune <- stringr::str_remove_all(ds$comune, the_names_2)
+
+join_comuni_limiti= left_join(ds, limiti_amministrativi_comuni, by = c(comune ="COMUNE"))
+
+
+
+fatturato_comune = join_comuni_limiti %>% 
+  select(c(-14,-CC_UTS,-SHAPE_AREA, -SHAPE_LEN, -COD_CM, )) 
+
+limiti_amministrativi_comuni
+fatturato_comune
+
+```
+
+# Regione
+
+```{r echo=FALSE}
+limiti_amministrativi_reg = read_sf("Limiti01012020_g/Reg01012020_g/Reg01012020_g_WGS84.shp")
+limiti_amministrativi_reg= limiti_amministrativi_reg %>% 
+  select(-COD_RIP,-SHAPE_AREA, -SHAPE_LEN)
+limiti_amministrativi_reg
+```
+
+
+```{r echo=FALSE}
+provincia_reg= fatturato_provincia %>% 
+  select(-geometry)  %>% # rimuovo geometry delle province
+  left_join(.,limiti_amministrativi_reg , by = "COD_REG")
+
+provincia_reg
+```
+
+
+
+```{r echo=FALSE}
+
+fatturato_regione = fatturato_provincia %>% 
+  select(-geometry)  %>% # rimuovo geometry delle province  
+  group_by(COD_REG) %>% 
+  summarise(fatturato20= sum(fatturato20)) %>% 
+  left_join(.,limiti_amministrativi_reg , by = "COD_REG")
+  
+fatturato_regione
+```
+
+```{r echo=FALSE}
+
+geo_fatturato_reg= st_transform(st_as_sf(fatturato_regione %>% select(DEN_REG, everything()))) #reorder??
+geo_limiti_amministrativi_reg= st_transform(limiti_amministrativi_reg %>% select(DEN_REG, everything()))
+
+popup= c("fatturato20","DEN_REG")
+
+tm_shape(geo_limiti_amministrativi_reg)+
+  tm_polygons()+
+  #tm_polygons(col= "fatturato20")+
+  tm_shape(geo_fatturato_reg)+
+  tm_fill("fatturato20", breaks = seq(0, 70, by = 10) * 1e8, popup.vars = popup)+
+  tm_borders() 
+
+
+```
+
+
+## Fatturato  
+
+```{r echo=FALSE}
+
+popup = c("fatturato20", "fatturato19")
+tm_shape(geo_ds) +
+  tm_symbols(jitter = 0.5, 
+             col = "fatturato20",
+             size = "fatturato20",
+             style= "jenks",
+             n=7,
+             popup.vars = popup
+  )+
+  tm_basemap()
+
+
+```
+
+
+# Utile
+
+```{r echo=FALSE}
+popup = c("utile20", "utile19")
+tm_shape(geo_ds) +
+  tm_symbols(jitter = 0.5, 
+             col = "utile20",
+             size = "utile20",
+             style= "jenks",
+             n=7,
+             popup.vars = popup,
+             )+
+  tm_basemap()
+
+```
+
+# ROS
+
+```{r echo=FALSE}
+popup= c("ros20", "ros19")
+tm_shape(geo_ds) +
+  tm_symbols(jitter = 0.5, 
+             col = "ros20",
+             size = "ros20",
+             style= "jenks",
+             n=7,
+             popup.vars = popup,
+  )+
+  tm_basemap()
+
+```
+
+
+# ROE
+
+```{r echo=FALSE}
+
+popup= c("roe20", "roe19")
+tm_shape(geo_ds) +
+  tm_symbols(jitter = 0.5, 
+             col = "roe20",
+             size = "roe20",
+             style= "jenks",
+             n=7,
+             popup.vars = popup,
+  )+
+  tm_basemap()
+
+
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+# indirizzo : Scrapping pagine gialle????
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+

@@ -1,3 +1,3 @@
 # tirocinio
 
-Il file .app è dentro la cartella "Mappa_logistica_2022"
+Il file app.R è dentro la cartella "Mappa_logistica_2022"

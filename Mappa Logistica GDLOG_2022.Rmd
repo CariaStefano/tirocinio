@@ -13,14 +13,26 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r echo=FALSE}
 
-logistica_2022=readr::read_csv("GDL06_geo_classifica_22.csv", na = "N.D.", 
+logistica_2022=readr::read_csv("GDLOG classifica 2022__NGEOM.csv", na = "N.D.", 
                    col_types = list("RAGIONE SOCIALE"= readr::col_factor(), 
-                                    "SEDE"= readr::col_factor(), 
+                                    "SEDE"= readr::col_factor(),
+                                    "display_name"= readr::col_factor(),
                                     "PROV"= readr::col_factor()))
 summary(logistica_2022)
 
 ```
+```{r}
+logistica_2022[logistica_2022$accuracy <= 0.6, ]
 
+#ds[ds$provincia== "OC",]
+```
+```{r}
+#### TODO
+low_accuracy= logistica_2022[logistica_2022$accuracy <= 0.5, "SEDE" ]
+a=stringr::str_remove_all(low_accuracy$SEDE, "(?<=,).*?(?=,)")
+b=stringr::str_replace_all(a, ",,,", ",")
+
+```
 # Librerie
 
 ```{r pressure, echo=FALSE}
@@ -58,12 +70,12 @@ return(data$col)
 
 ```{r echo=FALSE}
 
-selection= c("nome"=1, "comune"=2, "provincia"=3, "fatturato20"=4, 
-         "fatturato19"=5, "utile20"=6, "utile19"=7, 
-         "ros20"= 8, "ros19"=9, "roe20"= 10, "roe19"= 11 )
+selection= c("nome"= "RAGIONE SOCIALE", "comune"="SEDE", "provincia"="PROV", "fatturato20"="FATTURATO ‘20", 
+         "fatturato19"="FATTURATO ’19", "utile20"="UTILE ‘20", "utile19"="UTILE ’19", 
+         "ros20"= "ROS ‘20", "ros19"="ROS ‘19", "roe20"= "ROE ‘20", "roe19"= "ROE ‘19" )
 
 ds = logistica_2022 %>%
-  select(-`...1`,-`POS. '21`, -`POS. 22` ) %>% 
+  select(-`POS. '22`, -`POS. '21` ) %>% #-`...1`
   select(selection, everything()) %>% 
   mutate(fatturato20= numeric_conversion(fatturato20),
          fatturato19= numeric_conversion(fatturato19),
@@ -76,33 +88,39 @@ ds = logistica_2022 %>%
 
 ds
 ```
-
+```{r echo=FALSE}
+ds= ds %>% 
+  mutate(variazione_fatturato= fatturato20 - fatturato19,
+         variazione_utile= utile20 - utile19) %>%   
+  mutate(variazione_fatturato_percentuale = round(100* variazione_fatturato/fatturato20, 2), 
+         variazione_utile_percentuale = round((100*variazione_utile/utile20), 2),)
+```
 #########################
 
 ```{r echo=FALSE}
-ds = ds %>% 
-  select(-1,-2,-3) %>% 
-  select("nome"=1, "comune"=2, "provincia"=3, "fatturato20"=4, 
-         "fatturato19"=5, "utile20"=6, "utile19"=7, 
-         "ros20"= 8, "ros19"=9, "roe20"= 10, "roe19"= 11,  everything()) %>% 
-  mutate(fatturato20=gsub("\\.", "", fatturato20),
-         fatturato20= as.numeric(fatturato20), 
-         fatturato19=gsub("\\.", "", fatturato19),
-         fatturato19= as.numeric(fatturato19),
-         utile20 = gsub("\\.", "", utile20),
-         utile20= as.numeric(utile20), 
-         utile19= gsub("\\.", "", utile19),
-         utile19= as.numeric(utile19),
-         ros20=gsub("\\,", ".", ros20),
-         ros20= as.numeric(ros20),
-         ros19= gsub("\\,", ".", ros19),
-         ros19= as.numeric(ros19),
-         roe20 = gsub("\\,", ".", roe20),
-         roe20= as.numeric(roe20),
-         roe19 = gsub("\\,", ".", roe19),
-         roe19= as.numeric(roe19))
+# ds = ds %>%
+#   select(-1,-2,-3) %>%
+#   select("nome"=1, "comune"=2, "provincia"=3, "fatturato20"=4,
+#          "fatturato19"=5, "utile20"=6, "utile19"=7,
+#          "ros20"= 8, "ros19"=9, "roe20"= 10, "roe19"= 11,  everything()) %>%
+#   mutate(fatturato20=gsub("\\.", "", fatturato20),
+#          fatturato20= as.numeric(fatturato20),
+#          fatturato19=gsub("\\.", "", fatturato19),
+#          fatturato19= as.numeric(fatturato19),
+#          utile20 = gsub("\\.", "", utile20),
+#          utile20= as.numeric(utile20),
+#          utile19= gsub("\\.", "", utile19),
+#          utile19= as.numeric(utile19),
+#          ros20=gsub("\\,", ".", ros20),
+#          ros20= as.numeric(ros20),
+#          ros19= gsub("\\,", ".", ros19),
+#          ros19= as.numeric(ros19),
+#          roe20 = gsub("\\,", ".", roe20),
+#          roe20= as.numeric(roe20),
+#          roe19 = gsub("\\,", ".", roe19),
+#          roe19= as.numeric(roe19))
 
-ds
+# ds
 ```
 
 
@@ -114,7 +132,7 @@ ds
 limiti_amministrativi_prov = read_sf("Limiti01012020_g/ProvCM01012020_g/ProvCM01012020_g_WGS84.shp")
 
 limiti_amministrativi_prov = limiti_amministrativi_prov %>% 
-   select(-COD_RIP, -COD_UTS,-COD_PROV,-COD_CM,-DEN_CM,-TIPO_UTS,-SHAPE_AREA, -SHAPE_LEN, "Provincia"=DEN_UTS, -DEN_PROV) # in DEN_PROV ci sono alune osservazioni mancanti. Si è scelto di prendere DEN_UTS e rinominarlo come "Provincia"
+   select(-COD_RIP, -COD_UTS,-COD_PROV,-COD_CM,-DEN_CM,-TIPO_UTS,-SHAPE_AREA, -SHAPE_LEN, "Provincia"=DEN_UTS, -DEN_PROV, -SIGLA) # in DEN_PROV ci sono alune osservazioni mancanti. Si è scelto di prendere DEN_UTS e rinominarlo come "Provincia"
  
 limiti_amministrativi_prov
 
@@ -129,9 +147,16 @@ limiti_amministrativi_prov
 aggregare =function(data){
 data= 
   ds %>%
-  group_by(provincia) %>% 
-  summarise(fatturato20= sum(fatturato20)) %>% 
-  left_join(., limiti_amministrativi_prov, by = c(provincia = "SIGLA")) #%>% 
+  group_by(Provincia) %>% 
+    summarise(fatturato20= sum(fatturato20),
+              fatturato19= sum(fatturato19, na.rm = T),
+              utile20 = sum(utile20, na.rm = T),
+              utile19 = sum(utile19, na.rm = T),
+              variazione_fatturato_percentuale = mean(variazione_fatturato_percentuale), #fare una media?
+              variazione_utile_percentuale = mean(100*sum(variazione_utile, na.rm = T)/sum(utile20), 2),
+              roe20= mean(roe20, na.rm= T),
+              ros20= mean(ros20, na.rm = T)) %>% 
+  left_join(., limiti_amministrativi_prov, by = "Provincia") #%>% 
   #na.omit(.) # TODO
 print(data)
 
@@ -149,6 +174,7 @@ fatturato_provincia[is.na(fatturato_provincia$Provincia),] #OC ,OT, PGG
 ```
 
 ```{r}
+#nel preprocessing
 ds[ds$provincia== "OC",] # MUTTI SPA	Podenzano, provincia di Piacenza (PC)
 ds[ds$provincia== "OT",] #NUOVA LOGISTICA LUCIANU SRL	Olbia, Italia --> SASSARI (SS)
 ds[ds$provincia== "PGG",] #CENTRO SMISTAMENTO MERCI	Citta' Di Castello, Italia --> Perugia (PG)
@@ -170,7 +196,8 @@ fatturato_provincia = aggregare(fatturato_provincia)
 # Trasformo in oggetto sf
 
 ```{r}
-geo_ds= st_as_sf(ds, coords = c("long", "lat"), crs = "EPSG:4326")
+geo_ds= st_as_sf(ds, coords = c("longitude", "latitude"), crs = "EPSG:4326")
+geo_ds= st_point_on_surface(geo_ds)
 ```
 
 # Mappa
@@ -184,6 +211,7 @@ geo_limiti_amministrativi= st_transform(limiti_amministrativi_prov %>% select(-C
 
 popup= c("fatturato20","Provincia")
 tm_shape(geo_limiti_amministrativi)+
+  tmap_options(check.and.fix = TRUE) +
   tm_polygons()+
   #tm_fill(popup.vars = popup)+
   tm_shape(l_amm)+
@@ -197,13 +225,16 @@ tm_shape(geo_limiti_amministrativi)+
 
 ```{r echo=FALSE}
 
+limiti_amministrativi_comuni = read_sf("Limiti01012020_g/Com01012020_g/Com01012020_g_WGS84.shp")
 # rimuovo Italia
 
 the_names_2= ", Italia"
-ds$comune <- stringr::str_remove_all(ds$comune, the_names_2)
+ds$comune <- stringr::str_remove(ds$comune, the_names_2)
+ds$comune <- stringr::str_remove(ds$comune,", [[A-Z][a-zA-Z]* ]*, [A-Z][a-z]*")
 
 join_comuni_limiti= left_join(ds, limiti_amministrativi_comuni, by = c(comune ="COMUNE"))
 
+join_comuni_limiti[is.na(join_comuni_limiti$SHAPE_AREA),]
 
 
 fatturato_comune = join_comuni_limiti %>% 
@@ -224,22 +255,20 @@ limiti_amministrativi_reg
 ```
 
 
-```{r echo=FALSE}
-provincia_reg= fatturato_provincia %>% 
-  select(-geometry)  %>% # rimuovo geometry delle province
-  left_join(.,limiti_amministrativi_reg , by = "COD_REG")
-
-provincia_reg
-```
-
-
 
 ```{r echo=FALSE}
 
 fatturato_regione = fatturato_provincia %>% 
   select(-geometry)  %>% # rimuovo geometry delle province  
   group_by(COD_REG) %>% 
-  summarise(fatturato20= sum(fatturato20)) %>% 
+  summarise(fatturato20= sum(fatturato20),
+            fatturato19= sum(fatturato19, na.rm = T),
+            utile20 = sum(utile20, na.rm = T),
+            utile19 = sum(utile19, na.rm = T),
+            variazione_fatturato_percentuale = sum(variazione_fatturato_percentuale, na.rm = T), #fare una media?
+            variazione_utile_percentuale = sum(variazione_utile_percentuale, na.rm = T),
+            roe20= mean(roe20, na.rm= T),
+            ros20= mean(ros20, na.rm = T)) %>% 
   left_join(.,limiti_amministrativi_reg , by = "COD_REG")
   
 fatturato_regione
@@ -267,9 +296,13 @@ tm_shape(geo_limiti_amministrativi_reg)+
 
 ```{r echo=FALSE}
 
-popup = c("fatturato20", "fatturato19")
-tm_shape(geo_ds) +
-  tm_symbols(jitter = 0.5, 
+popup = c("fatturato20", "fatturato19", "comune")
+
+tm_shape(geo_limiti_amministrativi)+
+  tm_polygons(alpha = 0, border.alpha = 0)+
+  tmap_options(check.and.fix = TRUE)+
+  tm_shape(geo_ds) +
+  tm_symbols(jitter = 0.05, 
              col = "fatturato20",
              size = "fatturato20",
              style= "jenks",

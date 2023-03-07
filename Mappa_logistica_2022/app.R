@@ -1,7 +1,7 @@
 pkgs = c("sf", "shiny", "spData", "leaflet", "tidyverse", "spDataLarge", "units", "tmap", "dplyr")
 invisible(lapply(pkgs, library, character.only = TRUE))
 
-
+#install.packages("shinyWidgets")
 
 # import Data
 logistica_2022=readr::read_csv("../GDLOG classifica 2022__NGEOM.csv", na = "N.D.", 
@@ -160,6 +160,10 @@ ui = fluidPage(
                                      choices = list("fatturato20", "utile20", "roe20", "ros20" ), 
                                      selected = "fatturato20"),
               br(),
+
+              selectizeInput("search", h3("Cerca per nome:"), choices = geo_ds$nome , selected = NULL,
+                             multiple = T, # allow for multiple inputs
+                             options = list(create = FALSE)),
               uiOutput("slider_fatturato"),
               br(),
               uiOutput("slider_utile"),
@@ -168,7 +172,8 @@ ui = fluidPage(
               br(),
               sliderInput("slider_ros", h3("Filtra per ROS:"),
                           min = -108 , max= 116, value=-108 ),
-              br()
+              br(),
+              #tableOutput("table")
               ),
       div( #~~ Main panel ~~#
         titlePanel("Mappa logistica 2022"),
@@ -189,7 +194,7 @@ ui = fluidPage(
 # })
 #   }
 
-server <- function(input, output){
+server <- function(input, output, session){
   
   # output$slider_fatturato <- renderUI({if(input$radio_vis == "località"){f(geo_ds$fatturato20)}
   #   else if (input$radio_vis == "province") {f(l_amm$fatturato20)}
@@ -283,12 +288,14 @@ server <- function(input, output){
                   max   = max_v_fatt,
                   value = min_v_fatt)}
   })
+
+    updateSelectizeInput(session, "search", choices = geo_ds$nome, server = T, selected = NULL )
+
   
 
 # output$map
   
-  output$map <- renderTmap({
-    tm_basemap(leaflet::providers$CartoDB.DarkMatter)+
+  output$map <- renderTmap({tm_basemap(leaflet::providers$CartoDB.DarkMatter)+    
 
 #Mappa per province
     #Mappa per località  
@@ -298,7 +305,8 @@ server <- function(input, output){
     #tm_shape(geo_limiti_amministrativi)+
       #tm_polygons(alpha = 0, border.alpha = 0)+
       #tmap_options(check.and.fix = TRUE)+
-      geo_ds %>% dplyr::filter(fatturato20 >= input$slider_fatturato,
+      geo_ds %>% dplyr::filter(nome == if (is.null(input$search)) {nome} else {input$search},
+                               fatturato20 >= input$slider_fatturato,
                                variazione_fatturato_percentuale >= input$slider_var_fatt,
                                utile20 >= input$slider_utile) %>%
       tm_shape(.)+

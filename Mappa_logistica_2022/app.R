@@ -152,6 +152,7 @@ ui = fluidPage(
     style = "display:flex; align-items:flex-start",
     div(
     wellPanel(style= "overflow-y: auto; position:fixed; width:300px; top:0; bottom:0",
+              br(),
               radioButtons("radio_vis", h3("Visualizza per:"),
                            choices = list("regioni", "province", "località"), 
                            selected = "località"),
@@ -160,27 +161,39 @@ ui = fluidPage(
                                      choices = list("fatturato20", "utile20", "roe20", "ros20" ), 
                                      selected = "fatturato20"),
               br(),
-
-              selectizeInput("search", h3("Cerca per nome:"), choices = geo_ds$nome , selected = NULL,
-                             multiple = T, # allow for multiple inputs
-                             options = list(create = FALSE)),
+              uiOutput("search"),
+              uiOutput("search_provincia"),
+              uiOutput("clustering"),
               uiOutput("slider_fatturato"),
               br(),
               uiOutput("slider_utile"),
               br(),
               uiOutput("slider_var_fatt"),
               br(),
+              uiOutput("slider_var_utile"),
+              br(),
               sliderInput("slider_ros", h3("Filtra per ROS:"),
                           min = -108 , max= 116, value=-108 ),
-              br(),
+              br()
               #tableOutput("table")
               ),
-      div( #~~ Main panel ~~#
+      div(
+        navbarPage("my application",
+        tabPanel("table", dataTableOutput("table"),
+                 style = "flex-grow:1; resize:horizontal; overflow: hidden; position:relative; margin-left: 310px",
+                 tags$style(type = "text/css", "#table {height: calc(300vh) !important; width:calc(120vh) !important; }")),
+        tabPanel("sentiment analysis"),
+        tabPanel("dashboard", plotOutput("plot"),
+                 style = "flex-grow:1; resize:horizontal; overflow: hidden; position:relative; margin-left: 310px",
+                 tags$style(type = "text/css", "#plot {height: calc(90vh) !important; width:calc(120vh) !important; }")),
+        tabPanel("Component 5"),
+       #~~ Main panel ~~#
+        tabPanel("main",
         titlePanel("Mappa logistica 2022"),
         tmapOutput("map"),
         style = "flex-grow:1; resize:horizontal; overflow: hidden; position:relative; margin-left: 310px",
-        tags$style(type = "text/css", "#map {height: calc(90vh) !important; width:calc(120vh) !important; }")
-      ))))
+        tags$style(type = "text/css", "#map {height: calc(90vh) !important; width:calc(120vh) !important; }"))
+      )))))
   
 
 # f= function(datacolumn){renderUI({
@@ -203,7 +216,7 @@ server <- function(input, output, session){
 
 #slider_fatturato  
   output$slider_fatturato <- renderUI({
-    if(input$radio_vis == "località"){
+    if(input$radio_vis == "località" | is.null(input$search_provincia)== F){
       max_fatt <- max(na.omit(geo_ds$fatturato20))
       min_fatt <- min(na.omit(geo_ds$fatturato20))
     
@@ -212,7 +225,7 @@ server <- function(input, output, session){
                 max   = max_fatt,
                 value = min_fatt)}
     
-    else if (input$radio_vis == "province") {
+    else if (input$radio_vis == "province" & is.null(input$search_provincia)) {
       max_fatt <- max(l_amm$fatturato20 )
       min_fatt <- min(l_amm$fatturato20 )
       
@@ -261,7 +274,7 @@ server <- function(input, output, session){
   })
   
 #slider_var_fatt  
-  output$slider_var_fatt <- renderUI({if(input$radio_vis == "località"){
+  output$slider_var_fatt <- renderUI({if(input$radio_vis == "località" | is.null(input$search_provincia)== F){
     max_v_fatt <- max(na.omit(geo_ds$variazione_fatturato_percentuale))
     min_v_fatt <- min(na.omit(geo_ds$variazione_fatturato_percentuale))
     
@@ -270,7 +283,7 @@ server <- function(input, output, session){
                 max   = max_v_fatt,
                 value = min_v_fatt)}
     
-    else if (input$radio_vis == "province") {
+    else if (input$radio_vis == "province" & is.null(input$search_provincia)) {
       max_v_fatt <- max(na.omit(l_amm$variazione_fatturato_percentuale ))
       min_v_fatt <- min(na.omit(l_amm$variazione_fatturato_percentuale ))
       
@@ -288,19 +301,106 @@ server <- function(input, output, session){
                   max   = max_v_fatt,
                   value = min_v_fatt)}
   })
-
+#slider_var_utile  
+  output$slider_var_utile <- renderUI({if(input$radio_vis == "località"){
+    max_v_utile <- max(na.omit(geo_ds$variazione_utile_percentuale))
+    min_v_utile <- min(na.omit(geo_ds$variazione_utile_percentuale))
+    
+    sliderInput("slider_var_utile", h3("Filtra per variazione % utile:") , 
+                min   = min_v_utile, 
+                max   = max_v_utile,
+                value = min_v_utile)}
+    
+    else if (input$radio_vis == "province") {
+      max_v_utile <- max(na.omit(l_amm$variazione_utile_percentuale ))
+      min_v_utile <- min(na.omit(l_amm$variazione_utile_percentuale ))
+      
+      sliderInput("slider_var_utile", h3("Filtra per variazione % utile:") , 
+                  min   = min_v_utile, 
+                  max   = max_v_utile,
+                  value = min_v_utile)}
+    
+    else if (input$radio_vis == "regioni") {
+      max_v_utile <- max(na.omit(geo_fatturato_reg$variazione_utile_percentuale ))
+      min_v_utile <- min(na.omit(geo_fatturato_reg$variazione_utile_percentuale))
+      
+      sliderInput("slider_var_utile", h3("Filtra per variazione % utile:") , 
+                  min   = min_v_utile, 
+                  max   = max_v_utile,
+                  value = min_v_utile)}
+  })
+  
+  
+  
+  
+  # input search
+  
+  output$search <- renderUI({if(input$radio_vis == "località"){
+    selectizeInput("search", h3("Cerca per nome:"), choices = geo_ds$nome , selected = NULL,
+                   multiple = T, # allow for multiple inputs
+                   options = list(create = FALSE))
+  }
+    
+  })
     updateSelectizeInput(session, "search", choices = geo_ds$nome, server = T, selected = NULL )
 
+# input search_provincia
+    
+    output$search_provincia <- renderUI({if(input$radio_vis == "province"){
+      selectizeInput("search_provincia", h3("Cerca per provincia:"), choices = geo_ds$Provincia , selected = NULL,
+                     multiple = T, # allow for multiple inputs
+                     options = list(create = FALSE))
+    }
+      
+    })
+    updateSelectizeInput(session, "search_provincia", choices = geo_ds$Provincia, server = T, selected = NULL )
+    
+  output$clustering <- renderUI({if(input$radio_vis == "province" & is.null(input$search_provincia)== F){
+    checkboxGroupInput("clustering", h4("clustering"), choices = "y", selected = NULL)}
+  })
+
+  dat <- reactive({geo_ds %>% dplyr::filter(nome == if (is.null(input$search)) {nome} else {input$search},
+                                     fatturato20 >= input$slider_fatturato,
+                                     variazione_fatturato_percentuale >= input$slider_var_fatt,
+                                     utile20 >= input$slider_utile,
+                                     variazione_utile_percentuale >= input$slider_var_utile)})
+
+#output$table
+    output$table <- renderDataTable({dat()})
   
 
+    arrivi_mese<- provenienza_cleaned %>% 
+      group_by(mese)  %>% 
+      summarise(arrivi = sum(arrivi))
+    
+    arrivi_mese
+    
+    arrivi_mese %>% 
+      mutate(MonthLabel= month(mese, label= T)) %>%
+      ggplot(aes(MonthLabel, arrivi))+
+      geom_bar(stat = "identity") +
+      scale_y_continuous(labels = label_number( big.mark = ".", decimal.mark= ","))+
+      theme(axis.text.y = element_text(size = 8), plot.title = element_text(hjust = 0.5),
+            plot.subtitle = element_text(hjust = 0.5)) +
+      ggtitle("Arrivi mensili nelle strutture in Sardegna 2021 ", 
+              subtitle= "Numero di arrivi nelle strutture ricettive sarde nei vari mesi dell'anno") +
+      xlab("N° Arrivi") + ylab("Provenienza")
+    
+  
+    output$plot<-renderPlot({
+      dat() %>% 
+        #top_n(10) %>% 
+        ggplot(.,aes(nome,fatturato20))+
+        geom_bar(stat = "identity")})
+    
 # output$map
   
   output$map <- renderTmap({tm_basemap(leaflet::providers$CartoDB.DarkMatter)+    
 
-#Mappa per province
-    #Mappa per località  
+
+#Mappa per località  
     if (input$radio_vis == "località") {
-    popup = c("fatturato20", "variazione_fatturato_percentuale", "roe20", "comune")
+    popup = c("fatturato20", "utile20", "variazione_fatturato_percentuale","variazione_utile_percentuale", "roe20", "comune")
     
     #tm_shape(geo_limiti_amministrativi)+
       #tm_polygons(alpha = 0, border.alpha = 0)+
@@ -308,7 +408,8 @@ server <- function(input, output, session){
       geo_ds %>% dplyr::filter(nome == if (is.null(input$search)) {nome} else {input$search},
                                fatturato20 >= input$slider_fatturato,
                                variazione_fatturato_percentuale >= input$slider_var_fatt,
-                               utile20 >= input$slider_utile) %>%
+                               utile20 >= input$slider_utile,
+                               variazione_utile_percentuale >= input$slider_var_utile ) %>%
       tm_shape(.)+
 
       tm_symbols(jitter = 0.05,
@@ -316,38 +417,81 @@ server <- function(input, output, session){
                  size = input$radio ,
                  style= "jenks",
                  n=7,
-                 popup.vars = popup)}
-    else if(input$radio_vis == "province") {
-      popup= c("fatturato20","variazione_fatturato_percentuale", "Provincia")
+                 popup.vars = popup
+                 )}
+    
+#Mappa per province
+    else if(input$radio_vis == "province" & is.null(input$search_provincia)) {
+      popup= c("fatturato20","utile20","variazione_fatturato_percentuale", "variazione_utile_percentuale", "Provincia")
         tm_shape(geo_limiti_amministrativi) +
         tmap_options(check.and.fix = TRUE) +
         tm_polygons(alpha = 0.6, border.alpha = 0.6) +
         l_amm %>% 
         dplyr::filter(fatturato20 >= input$slider_fatturato,
                       variazione_fatturato_percentuale >= input$slider_var_fatt,
-                      utile20 >= input$slider_utile) %>%
+                      utile20 >= input$slider_utile,
+                      variazione_utile_percentuale >= input$slider_var_utile ) %>%
         tm_shape(.)+
-        tm_fill(input$radio,style = "jenks", n= 7,  popup.vars = popup, showNA = T ) +
+        tm_fill(input$radio,style = "jenks", n= 7,  popup.vars = popup, showNA = T) +
+          tm_borders(alpha = 1)
+          #tm_shape(geo_ds)+
+          #tm_dots(clustering= T,) #numero aziende cluster
         #tm_fill(popup.vars = popup)+
-        tm_borders()
-      
+        }
+
+      else if(input$radio_vis == "province" & (is.null(input$search_provincia)== FALSE)) {
+          popup= c("fatturato20","utile20","variazione_fatturato_percentuale", "variazione_utile_percentuale","roe20", "comune")
+          geo_limiti_amministrativi %>% 
+          dplyr::filter(Provincia == input$search_provincia) %>% 
+          tm_shape(.)+
+            tmap_options(check.and.fix = TRUE) +
+            tm_polygons(alpha = 0.6, border.alpha = 0.6)+
+            geo_ds %>% 
+            dplyr::filter(Provincia== input$search_provincia,
+                          fatturato20 >= input$slider_fatturato,
+                          variazione_fatturato_percentuale >= input$slider_var_fatt,
+                          utile20 >= input$slider_utile,
+                          variazione_utile_percentuale >= input$slider_var_utile ) %>%
+            tm_shape(.)+
+            if (is.null(input$clustering)){tm_symbols(jitter = 0.05,
+                            col = input$radio ,
+                            size = input$radio ,
+                            style= "jenks",
+                            n=7,
+                            popup.vars = popup)}
+
+            else{tm_dots(clustering= T,jitter = 0.05,
+                       col = input$radio ,
+                       size = input$radio ,
+                       style= "jenks",
+                       n=7,
+                       popup.vars = popup )}
+          #+
+            # tm_symbols(jitter = 0.05,
+            #            col = input$radio ,
+            #            size = input$radio ,
+            #            style= "jenks",
+            #            n=7,
+            #            popup.vars = popup)
+          }
       
       
 
 #Mappa per regioni
         
-    }else if (input$radio_vis == "regioni") {
-      popup= c("fatturato20","variazione_fatturato_percentuale", "roe20", "DEN_REG")
+    else if (input$radio_vis == "regioni") {
+      popup= c("fatturato20","utile20","variazione_fatturato_percentuale", "variazione_utile_percentuale","roe20", "DEN_REG")
       tm_shape(geo_limiti_amministrativi_reg)+
+        tmap_options(check.and.fix = TRUE) +
         tm_polygons(alpha = 0.6, border.alpha = 0.6)+
         geo_fatturato_reg %>% 
         dplyr::filter(fatturato20 >= input$slider_fatturato,
                       variazione_fatturato_percentuale >= input$slider_var_fatt,
-                      utile20 >= input$slider_utile) %>%
+                      utile20 >= input$slider_utile,
+                      variazione_utile_percentuale >= input$slider_var_utile ) %>%
         tm_shape(.)+
         tm_fill(input$radio , style= "jenks", n=7, popup.vars = popup, showNA = T)+
-        tm_borders()+
-        tm_legend()
+        tm_borders()
     }
 })
 

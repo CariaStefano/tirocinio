@@ -27,7 +27,7 @@ logistica_2022[logistica_2022$accuracy <= 0.6, ]
 #ds[ds$provincia== "OC",]
 ```
 ```{r}
-#### TODO
+#### TODO preprocessing
 low_accuracy= logistica_2022[logistica_2022$accuracy <= 0.5, "SEDE" ]
 a=stringr::str_remove_all(low_accuracy$SEDE, "(?<=,).*?(?=,)")
 b=stringr::str_replace_all(a, ",,,", ",")
@@ -378,6 +378,30 @@ tm_shape(geo_ds) +
 # indirizzo : Scrapping pagine gialle????
 
 ```{r}
+
+l_amm=st_transform(st_as_sf(fatturato_provincia %>% select(Provincia ,everything())))
+
+geo_limiti_amministrativi= st_transform(limiti_amministrativi_prov %>% select(-COD_REG))
+
+#geo_limiti_amministrativi= st_point_on_surface(geo_limiti_amministrativi)
+
+
+popup= c("fatturato20","Provincia")
+geo_limiti_amministrativi %>% filter( Provincia== "Torino") %>% 
+tm_shape(.)+
+  tmap_options(check.and.fix = TRUE) +
+  tm_polygons()+
+  geo_ds %>% filter(Provincia== "Torino") %>% 
+  tm_shape(.) +
+  tm_symbols(jitter = 0.05, 
+             col = "roe20",
+             size = "roe20",
+             style= "jenks",
+             n=7,
+             popup.vars = popup,
+  )+
+  tm_basemap()
+  
 
 ```
 
